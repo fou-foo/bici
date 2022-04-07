@@ -8,8 +8,6 @@ Los principales problemas que se plantean son 2:
 
 ## Index
 
-[TOC]
-
 ## Directory Structure
 
 ```
