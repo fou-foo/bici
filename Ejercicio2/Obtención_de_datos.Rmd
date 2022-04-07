@@ -1,0 +1,418 @@
+---
+title: "Obtención de datos"
+output: html_notebook
+author: Celia Salazar
+date: 04 de Abril 2022
+---
+
+En esta notebook se realiza la obtención de los datos de las variables a usar en el modelo de pronóstico para el tipo de cambio diario pesos-dólar.
+
+__Fuentes usadas:__
+
+  - https://www.banxico.org.mx/SieAPIRest/service/v1/doc/catalogoSeries# 
+
+
+  - https://www.inegi.org.mx/servicios/api_indicadores.html
+
+
+  - https://apps.bea.gov/api/signup/
+
+
+  - https://www.bls.gov/developers/
+
+
+  - https://data.nasdaq.com/tools/api
+
+__Valores a obtener:__
+
+
+  - (Banxico) Tipo de cambio, pesos por dólar E.U.A.
+
+
+  - (Banxico/INEGI) Producto interno bruto, cambio porcentual.
+
+
+  - (BEA) Percent Change From Preceding Period in Real Gross Domestic Product.
+
+
+  - (Banxico) Tasas de interés en el mercado de dinero.
+
+
+  - (Nasdaq) interest rate on U.S. government.
+
+
+  - (Banxico) Índice Nacional de Precios al consumidor.
+
+
+  - (BLS) Consumer Price Index.
+
+
+__Estructura:__
+
+
+  - Librerias
+  
+  
+  - Funciones
+  
+  
+  - Obtención y manipulación de datos
+  
+  
+  - Gráficas con datos finales
+
+```{r message=FALSE, warning=FALSE}
+#obtener valores banxico
+library("siebanxicor")
+
+#obtener valores INEGI
+library(httr)
+library(jsonlite)
+library(rjson)
+
+#GDP from BEA
+library(bea.R)
+
+# Consumer Price Index from BLS
+library(devtools)
+install_github("mikeasilva/blsAPI")
+library(blsAPI)
+
+#Interest Rate from nasdaq
+library(Quandl)
+
+#Gráficas
+library(ggplot2)
+library(gridExtra)
+
+library(readr)
+library(dplyr)
+```
+
+
+## Funciones
+```{r}
+#------------------------------------------------Banxico functions---------------------------
+#Obtiene json con datos provenientes de Banxico
+
+ban_json<- function(serie,star_y,end_y,token_v){
+  setToken(token_v)
+  json_val <- getSeriesData(serie,star_y,end_y)
+  return(json_val)
+}
+
+#------------------------------------------------INEGI functions---------------------------
+#Obtiene json con datos provenientes de INEGI
+inegi_json<-function(url_v,token){
+  #Generar URL 
+  url<-paste(url_v,token,"?type=json", sep = "")
+  
+  #Petición
+  respuesta<-GET(url)
+  datosGenerales<-content(respuesta,"text")
+  flujoDatos<-paste(datosGenerales,collapse = " ")
+  
+  #Obtención de la lista de observaciones 
+  flujoDatos<-fromJSON(flujoDatos)
+  flujoDatos<-flujoDatos $Series
+  flujoDatos<-flujoDatos[[1]] $OBSERVATIONS
+ return(flujoDatos)
+}
+
+#Obtener valores específicos del JSON
+
+get_in_values<- function(json_val,value){
+  val<-0
+  for(i in 1:length(json_val)){
+  val[i]<-json_val[[i]][[value]]}
+  return(val)
+}
+#------------------------------------------------BLS functions---------------------------
+#Obtiene json con datos CPI provenientes de BLS
+bls_json<- function(serie,star_y,end_y){
+  payload <- list('seriesid'=serie, 'startyear'=star_y, 'endyear'=end_y) 
+  response <- blsAPI(payload)
+  json_val<- fromJSON(response)
+  return(json_val)
+}
+
+#Obtiene una lista con las fechas(año+periodo) que vienen dentro del Json de BLS
+get_bdates<- function(cpi_json){
+  cpi_date<-0
+  for(i in 1:length(cpi_json[["Results"]][["series"]][[1]][["data"]])){
+    cpi_date[i]<-paste(cpi_json[["Results"]][["series"]][[1]][["data"]][[i]][["year"]],
+                       cpi_json[["Results"]][["series"]][[1]][["data"]][[i]][["period"]])
+      }
+  return(cpi_date)
+}
+
+#Obtiene una lista con los valores de CPI que vienen dentro del Json de BLS
+get_bvalues<- function(cpi_json){
+  cpi_val<-0
+  for(i in 1:length(cpi_json[["Results"]][["series"]][[1]][["data"]])){
+      cpi_val[i]<-cpi_json[["Results"]][["series"]][[1]][["data"]][[i]][["value"]]
+  }
+  return(cpi_val)
+}
+
+conv_to_date<- function(date_s){
+  año<-substr(date_s,0,4)
+  mes<-substr(date_s,7,9)
+  dia<-"01"
+  s_date<-paste(año,mes,dia, sep = "-")
+  s_date<-as.Date(s_date, "%Y-%m-%d")
+  return(s_date)
+}
+
+
+#------------------------------------------------BEA functions---------------------------
+
+#generar un string con los años que vamos a consultar en BEA
+string_años <- function(a1, a2) {
+  string_r<- as.character(a1)
+  for (i in 1:(a2-a1)) {
+    string_r=paste(string_r,",",a1+i, sep = "")
+  }
+  return(string_r)
+}
+
+conv_q_date<-function(date_q){
+  año<-substring(date_q,0,4)
+  quar<-substring(date_q,5,7)
+  mes<-ifelse(quar=="Q1","01",ifelse(quar=="Q2","04",ifelse(quar=="Q3","07",ifelse(quar=="Q4","10","NA"))))
+  dia<- "01"
+  q_date<-paste(año,mes,dia, sep = "-")
+  q_date<-as.Date(q_date, "%Y-%m-%d")
+  return(q_date)
+}
+```
+
+### tokens
+
+```{r}
+#Token Ban
+#token_ban<-"token"
+
+#Token Inegi
+#token_ine<-"token"
+
+#Token Bea
+#beaKey <- "token"
+
+#Token nasdak
+#nasdaqKey<-"token"
+```
+## Obtención y manipulación de datos
+### Datos Banxico
+```{r}
+#Tipo de cambio, pesos por dólar E.U.A.(Diaria) 
+TC_json<- ban_json('SF60653', '2002-01-01','2022-03-31',token_ban)
+
+#Tasa de interés
+TI_json<- ban_json('SF61745', '2002-01-01','2022-03-31',token_ban)
+
+#Producto interno bruto Producto interno bruto, a precios de mercado 
+PIBb_json<- ban_json('SR16573', '2001-10-01','2022-03-31',token_ban) #Empieza en 2001 para obtener cambio porcentual en 2002
+
+#Índice Nacional de Precios al consumidor
+IPC_json<- ban_json('SP1', '2002-01-01','2022-03-31',token_ban) 
+
+
+#Convertir a data Frame
+TC_df<-as.data.frame(TC_json)
+names(TC_df)<-c("date","value")
+
+TI_df<-as.data.frame(TI_json)
+names(TI_df)<-c("date","value")
+
+PIBb_df<-as.data.frame(PIBb_json)
+names(PIBb_df)<-c("date","net_value")
+
+IPC_df<-as.data.frame(IPC_json)
+names(IPC_df)<-c("date","value")
+
+
+#Convertir PIB a  Variación porcentual respecto al año anterior
+
+PIBb_df<- PIBb_df %>%arrange(desc(date)) %>% mutate(value = (net_value/lead(net_value) - 1) * 100)  %>% select(c('date','value'))
+PIBb_df <-na.omit(PIBb_df) #quitar row de 2011
+```
+
+
+### PIB  INEGI
+```{r}
+
+url_s<-"https://www.inegi.org.mx/app/api/indicadores/desarrolladores/jsonxml/INDICATOR/6207063404/es/0700/false/BISE/2.0/"
+
+#Obtener Json con PIB
+PIB_json<-inegi_json(url_s,token_ine)
+
+#Obtener datos que necesitamos del json 
+pib_dates<-get_in_values(PIB_json,"TIME_PERIOD")
+pib_values<-get_in_values(PIB_json,"OBS_VALUE")
+
+#Crear df
+PIB_df<-as.data.frame(list(pib_dates,pib_values))
+names(PIB_df) <-c("date","value")
+```
+
+### Consumer Price Index from BLS
+
+```{r}
+#Obtener json con CPI 1
+CPI_1json <- bls_json('CUUR0000SA0L1E','2002','2012')
+
+#El request anterior solo genero datos hasta 2011  por límite en consulta, por lo que necesitamos hacer un request más 
+CPI_2json <- bls_json('CUUR0000SA0L1E','2012','2022')
+
+#Obtener datos que necesitamos del json, fechas y valores.
+cpi_1date<-get_bdates(CPI_1json)
+cpi_2date<-get_bdates(CPI_2json)
+#Unir valores
+cpi_dates<-append(cpi_2date, cpi_1date)
+
+cpi_1val<-get_bvalues(CPI_1json)
+cpi_2val<-get_bvalues(CPI_2json)
+#Unir valores
+cpi_values<-append(cpi_2val, cpi_1val)
+
+#Crear Data Frame
+CPI_df<-as.data.frame(list(cpi_dates,cpi_values))
+names(CPI_df) <-c("date","value")
+
+#Convertir value a double
+CPI_df$value<-as.double(CPI_df$value)
+
+#Convertir date de "Y-M" a "%Y-%m-%d"
+CPI_df$date<-conv_to_date(CPI_df$date)
+```
+
+
+### Gross Domestic Product from BEA
+
+```{r}
+#Visualizar datasets disponibles
+beaSets(beaKey = beaKey)
+```
+
+```{r}
+#Parámetros requeridos para el Dataset
+beaParams(beaKey = beaKey, "NIPA")
+```
+```{r}
+#Búsqueda por palabras específicas
+head(beaSearch("Gross Domestic Product", beaKey = beaKey))
+```
+
+```{r}
+year_val<-string_años(2002,2022) #años que vamos a consultar
+
+#Percent Change From Preceding Period in Real Gross Domestic Product
+
+beaSpecs10 <- list(
+  "UserID" = beaKey, # Set up API key
+  "Method" = "GetData", # Method
+  "datasetname" = "NIPA", # Specify dataset
+  "TableName" = "T10101", # Specify table within the dataset
+  "Frequency"= "Q",
+  "Year" =year_val,
+  "ResultFormat" = "json"
+)
+
+GDP_df <- beaGet(beaSpecs10,asWide = FALSE)
+
+#variables que usaremos
+GDP_df<- GDP_df[GDP_df$LineDescription=="Gross domestic product", ]
+GDP_df<- GDP_df[,c("TimePeriod","DataValue")]
+
+names(GDP_df)<-c("date","value")
+
+#Convertir value a double
+GDP_df$value<-as.double(GDP_df$value)
+
+#Convertir date de "Q" a "%Y-%m-%d"
+
+GDP_df$date<-conv_q_date(GDP_df$date)
+```
+
+### Interest rate from Nasdaq
+
+```{r}
+# interest rate on U.S. government
+IR_df = Quandl("FRED/DTB3",start_date="2001-12-31", end_date="2022-01-01", type="raw")
+names(IR_df)<- c("date","value")
+```
+
+
+```{r}
+#Data Frames Finales
+#TC_df,PIBb_df,GDP_df,TI_df,IR_df,IPC_df,CPI_df)
+
+```
+## Summary
+
+```{r}
+cat("TC_df\n")
+summary(TC_df)
+
+cat("\nPIBb_df\n")#quarterly
+summary(PIBb_df)
+cat("\nGDP_df\n") #quarterly
+summary(GDP_df)
+
+cat("\nTI_df\n")
+summary(TI_df) 
+cat("\nIR_df\n") #daily with lacks
+summary(IR_df)
+
+cat("\nIPC_df\n")
+summary(IPC_df)
+cat("\nCPI_df\n") #monthly
+summary(CPI_df)
+
+
+```
+
+
+## Gráficas
+```{r echo=TRUE}
+
+p7<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=TC_df)+ggtitle("Tipo de cambio, pesos por dólar E.U.A.")+theme_bw()
+p1<-ggplot(NULL, aes(x=date, y=value )) +geom_line(color="#00b300", data=PIBb_df)+ggtitle("Producto interno bruto, cambio porcentual")+theme_bw()
+
+p2<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=GDP_df)+ggtitle("Gross Domestic Product,Percent Change")+theme_bw()
+p3<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=TI_df)+ggtitle("Tasa de interés")+theme_bw()
+#p3<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=PIB_df)+ggtitle("Producto interno bruto Producto interno bruto, a precios de mercado")
+#PIB no se considera dado que solo aparecen datos hasta 2021
+p4<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=IR_df) +ggtitle("Interest rate")+theme_bw()
+
+p5<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=IPC_df)+ggtitle("Índice Nacional de Precios al consumidor ")+theme_bw()
+p6<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=CPI_df)+ggtitle("Consumer Price Index")+theme_bw()
+
+```
+
+```{r}
+grid.arrange(p1,p2,p3,p4,p5,p6) 
+
+```
+
+```{r}
+p7
+```
+
+```{r message=FALSE, warning=FALSE}
+
+#Guardar Data frames a Csv
+write_csv(TC_df,"csv_files/TC_df.csv")
+write_csv(IPC_df,"csv_files/IPC_df.csv")
+write_csv(CPI_df,"csv_files/CPI_df.csv")
+write_csv(GDP_df,"csv_files/GDP_df.csv")
+write_csv(PIBb_df,"csv_files/PIBb_df.csv")
+write_csv(TI_df,"csv_files/TI_df.csv")
+write_csv(IR_df,"csv_files/IR_df.csv")
+```
+
+
+
+
+

@@ -1,0 +1,318 @@
+---
+title: "Pronóstico para el tipo de cambio diario pesos-dólar."
+output: html_notebook
+---
+
+En esta notebook buscamos realizar un pronóstico para el tipo de cambio diario pesos-dólar: Usando información del periodo "2002-01-01"-"2021-11-30" con las siguiente variables:
+
+  - (Banxico) Tipo de cambio, pesos por dólar E.U.A. (ln)
+
+
+  - (Banxico/INEGI) Producto interno bruto, cambio porcentual.(ln)
+
+
+  - (BEA) Percent Change From Preceding Period in Real Gross Domestic Product.(ln)
+
+
+  - (Banxico) Tasas de interés en el mercado de dinero. (0.25 ln(1 + Rt/100))
+
+
+  - (Nasdaq) interest rate on U.S. government.(0.25 ln(1 + Rt/100))
+
+
+  - (Banxico) Índice Nacional de Precios al consumidor.(ln)
+
+
+  - (BLS) Consumer Price Index.(ln)
+
+
+**Librerías**
+```{r message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+
+#series de tiempo
+library(xts)
+library(tseries)
+library(tsDyn) 
+library(vars)
+library(forecast)
+library(tidyverse)
+library(gridExtra)
+```
+
+
+**Funciones** 
+```{r}
+#Prueba de estacionaridad múltiples variables
+estacion_test <- function(dataset){
+  p_values<-NULL
+  for(i in 1:ncol(dataset)){
+    aux <- pp.test(dataset[,i])
+    p_values<-c(p_values,aux$p.value)
+  }
+  names(p_values)<-colnames(dataset)
+  return(p_values)
+}
+
+#Convertir data a trimestral sumarizando a media
+qdata<- function(dataset){
+  dataset$qdate<- as.yearqtr(dataset$date) #obtener fecha trimestral
+  dataset$qdate<-as.Date(as.yearqtr(dataset$qdate, "%Y-%m-%d")) #Convertir trimestral de string a date
+  data_q<-dataset %>% group_by(qdate) %>% summarise_all(mean)  %>%select(c("qdate","value")) #seleccionar solo fecha trimestral y valor
+  return(data_q)
+}
+
+#Convertir data a mensual sumarizando a media
+mdata<- function(dataset){
+  dataset$mdate<- as.yearmon(dataset$date) #obtener fecha mensual
+  dataset$mdate<-as.Date(as.yearmon(dataset$mdate, "%Y-%m-%d")) #Convertir mensual de string a date
+  data_m<-dataset %>% group_by(mdate) %>% summarise_all(mean) #seleccionar solo fecha mensual y valor
+  data_m<-data_m[,c("mdate","value")]
+  return(data_m)
+}
+#Convertir data a diaria
+
+ddata<-function(dataset){
+  datset_d <- xts(dataset$value,order.by = dataset$date)
+  datset_d <- na.locf(merge(datset_d , foo=zoo(NA, order.by=seq(as.Date("2002-01-01","%Y-%m-%d"), as.Date("2021-11-30","%Y-%m-%d"),"day",drop=F)))[, 1])
+  datset_d <-as.data.frame(list(rownames(as.data.frame(datset_d )),as.data.frame(datset_d)$datset_d))
+  names(datset_d)<-c("date","value")
+  return(datset_d)
+  }
+
+```
+
+### Obtener datos creados anteriormente en notebook 'Obtención de datos'
+```{r message=FALSE, warning=FALSE}
+TC_df_<- read_csv("csv_files/TC_df.csv") #diaria 
+IPC_df<- read_csv("csv_files/IPC_df.csv") #mensual
+CPI_df<- read_csv("csv_files/CPI_df.csv")#mensual
+GDP_df<- read_csv("csv_files/GDP_df.csv") #trimestral
+PIB_df<- read_csv("csv_files/PIBb_df.csv") #trimestral
+TI_df<- read_csv("csv_files/TI_df.csv")#diaria ! Datos desde 2008 
+IR_df<- read_csv("csv_files/IR_df.csv")#daily with lacks
+
+#Acortar periodos de tiempo,información antes del 30 de Noviembre
+TC_df<-subset(TC_df_, date <=as.Date("2021-11-30"))#diaria 
+IPC_df<-subset(IPC_df, date <=as.Date("2021-11-30"))#mensual
+CPI_df<-subset(CPI_df, date <=as.Date("2021-11-30"))#mensual
+GDP_df<-subset(GDP_df, date <=as.Date("2021-11-30"))#trimestral
+PIB_df<-subset(PIB_df, date <=as.Date("2021-11-30"))#trimestral
+IR_df<-subset(IR_df, (date <=as.Date("2021-11-30") & date >=as.Date("2002-01-01")))#daily with lacks
+
+``` 
+
+### Visualizaciones series
+```{r}
+p7<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=TC_df)+ggtitle("Tipo de cambio, pesos por dólar E.U.A.")+theme_bw()
+p1<-ggplot(NULL, aes(x=date, y=value )) +geom_line(color="#00b300", data=PIB_df)+ggtitle("Producto interno bruto, cambio porcentual")+theme_bw()
+
+p2<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=GDP_df)+ggtitle("Gross Domestic Product,Percent Change")+theme_bw()
+p3<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=TI_df)+ggtitle("Tasa de interés")+theme_bw()
+#p3<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=PIB_df)+ggtitle("Producto interno bruto Producto interno bruto, a precios de mercado")
+#PIB no se considera dado que solo aparecen datos hasta 2021
+p4<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=IR_df) +ggtitle("Interest rate")+theme_bw()
+
+p5<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=IPC_df)+ggtitle("Índice Nacional de Precios al consumidor ")+theme_bw()
+p6<-ggplot(NULL, aes(x=date, y=value)) +geom_line(color="#00b300", data=CPI_df)+ggtitle("Consumer Price Index")+theme_bw()
+grid.arrange(p1,p2,p3,p4,p5,p6) 
+```
+
+### Serie Tasa de Cambio
+```{r}
+p7
+```
+
+Descartaremos TI dado que tenemos datos solo hasta 2008
+
+```{r}
+#Definir series de tiempo
+TC.ts<-ts(TC_df$value,  start = c(2002, as.numeric(format(TC_df$date[1], "%j"))),frequency = 365)
+IPC.ts<-ts(IPC_df$value, start = c(2002, 1), frequency = 12)
+CPI.ts<-ts(CPI_df$value, start = c(2002, 1), frequency = 12)
+GDP.ts<-ts(GDP_df$value, start = c(2002, 1), frequency = 4)
+PIB.ts<-ts(PIB_df$value, start = c(2002, 1), frequency = 4)
+IR.ts<-ts(IR_df$value,  start = c(2002, as.numeric(format(IR_df$date[1], "%j"))),frequency = 365)
+```
+
+```{r}
+#Verificar estacionariedad de series 
+cat("valor-p para TC:",pp.test(TC.ts)$p.value,"\n")
+cat("\nvalor-p para IPC:",pp.test(IPC.ts)$p.value)
+cat("\nvalor-p para CPI:",pp.test(CPI.ts)$p.value)
+cat("\nvalor-p para GDP:",pp.test(GDP.ts)$p.value)
+cat("\nvalor-p para PIB:",pp.test(PIB.ts)$p.value)
+cat("\nvalor-p para TR:",pp.test(IR.ts)$p.value)
+```
+Dado que para nuestra serie principal TC no tenemos pruebas estadísticamente significativas de que sea estacionaria y recordando que, una combinacion de variables no estacionarias puede ser estacionaria, intentaremos construir un modelo VECM descartando las variables PIB, GDP
+
+
+```{r}
+#Convertir data a diaria para tener todas las series con la misma perioricidad.
+#Nota: En este paso también se podría intentar un método de interpolación, por ahora solo se repiten los valores en los días
+
+TC_df_d<- ddata(TC_df)
+IPC_df_d<-ddata(IPC_df)
+CPI_df_d<-ddata(CPI_df)
+IR_df_d<-ddata(IR_df)
+IR_df_d[is.na(IR_df_d)] <- 0 #EnIR no tenemos el primer valor
+``` 
+
+
+```{r}
+#Definir series
+TC_df_d.ts<-ts(TC_df_d$value, start = c(2002, 1), frequency = 365)
+IPC_df_d.ts<-ts(IPC_df_d$value, start = c(2002, 1), frequency = 365)
+CPI_df_d.ts<-ts(CPI_df_d$value, start = c(2002, 1), frequency = 365)
+IR_df_d.ts<-ts(IR_df_d$value, start = c(2002, 1), frequency = 365)
+
+
+#Transformar data a ln para verificar posible estacionaridad
+log_TC_df_d.ts <- log(TC_df_d.ts)
+log_IPC_df_d.ts <- log(IPC_df_d.ts)
+log_CPI_df_d.ts <- log(CPI_df_d.ts)
+log_IR_df_d.ts <-.25*(log(1+(IR_df_d.ts/100))) #Valor usado comúnmente en econometría 
+
+
+se_log_data <- cbind(log_TC_df_d.ts ,log_IPC_df_d.ts,log_CPI_df_d.ts,log_IR_df_d.ts)
+
+# Pruebas de estacionaridad
+estacion_test(se_log_data)
+```
+Seguimos teniendo series sin prubas estadísticamente significativas de que sean estacionarias, procedemos a construir VECM
+
+```{r}
+#Seleccionar el número óptimo de lags
+#Akaike, Hannan-Quinn, Schwarz, and Final Prediction Error
+VARselect(se_log_data, type = "const")
+#lapply(se_log_data, VARselect) #selección de lags por separadoo
+
+```
+
+```{r}
+ca_jo_trace <- ca.jo(se_log_data, type = "trace", ecdet = "const", K = 8)
+summary(ca_jo_trace)
+```
+
+```{r}
+ca_jo_eig<-ca.jo(se_log_data, type = "eigen", ecdet = "const", K = 8)
+summary(ca_jo_eig)
+
+```
+
+Tenemos al menos 2 relaciones de cointegración
+
+```{r}
+
+#Contruir modelo VECM 
+
+Model1 <- VECM(se_log_data, 8, r = 2, estim =("ML")) #ML dado que tenemos más de una relación
+summary(Model1)
+```
+
+```{r}
+#Transformar VECM a VAR
+vec2var_ca_jo_eig <- vec2var(ca_jo_eig, r=2)
+```
+
+```{r}
+#Correlación de series
+serial.test(vec2var_ca_jo_eig, lags.pt = 9, type = "PT.asymptotic")
+
+```
+Dado que el valor de p es menor a .05, no tenemos evidencia estadistica para asumir correlación de series. 
+
+
+
+```{r}
+#Prueba de normalidad, residuales
+
+#H0: La variable presenta una distribución normal
+#H1: La variable presenta una distribución no normal
+p_norm<- normality.test(vec2var_ca_jo_eig, multivariate.only = TRUE)
+p_norm
+```
+Rechazamos la hipótesis nula, los errores no siguen una distribución normal, podríamos buscar formas de mejorar este modelo.
+
+```{r}
+vec2var_ca_jo_eig
+```
+
+
+
+```{r}
+#Funciones de respuesta al impulso
+
+M1<- irf(vec2var_ca_jo_eig, impulse = "log_IPC_df_d.ts", response = "log_TC_df_d.ts", n.ahead = 20, boot = TRUE)
+plot(M1, ylab = "log_TC_df_d.ts", main = "IPC impulso a TC")
+
+M2<- irf(vec2var_ca_jo_eig, impulse = "log_CPI_df_d.ts", response = "log_TC_df_d.ts", n.ahead = 20, boot = TRUE)
+plot(M2, ylab = "log_TC_df_d.ts", main = "CPI impulso a TC")
+
+M3<- irf(vec2var_ca_jo_eig, impulse = "log_IR_df_d.ts", response = "log_TC_df_d.ts", n.ahead = 20, boot = TRUE)
+plot(M3, ylab = "log_TC_df_d.ts", main = "IR impulso a TC")
+
+M4<- irf(vec2var_ca_jo_eig, impulse = "log_TC_df_d.ts", response = "log_TC_df_d.ts", n.ahead = 20, boot = TRUE)
+plot(M4, ylab = "log_TC_df_d.ts", main = "TC impulso a TC")
+
+
+```
+
+
+```{r}
+plot(fevd(vec2var_ca_jo_eig))
+
+```
+
+```{r}
+fevd(vec2var_ca_jo_eig)
+```
+
+```{r}
+forecast<-predict(vec2var_ca_jo_eig,n.ahead=182, ci=0.95)
+fanchart(forecast,names="TC",main="TC",xlab="Horizon",ylab = "TC")
+
+```
+
+
+**Dado que también se realizó el pronóstico para meses que ya pasaron, podemos ver que tanto se aproximaron los valores reales a estos **
+
+```{r message=FALSE, warning=FALSE}
+#Archivo con serie completa
+TC_df_serie_completa<- read_csv("csv_files/TC_df.csv") #serie completa
+```
+
+```{r}
+#Filtrar para comparar pronóstico
+TC_df_serie_completa<-subset(TC_df_serie_completa, date>as.Date("2021-11-30"))#
+#agregar valores prónosticados, intervalo inferior, intervalo superior
+
+#Fechas de predicción para construir dataframe final
+fechas_pred<-seq(as.Date("2021-12-01","%Y-%m-%d"), as.Date("2022-05-31","%Y-%m-%d"),"day",drop=F)
+
+#Valores prónosticados
+int_inf<-exp(as.data.frame(forecast[["fcst"]][["log_TC_df_d.ts"]])$lower)
+val_<-exp(as.data.frame(forecast[["fcst"]][["log_TC_df_d.ts"]])$fcst)
+int_sup<-exp(as.data.frame(forecast[["fcst"]][["log_TC_df_d.ts"]])$upper)
+
+val_pron<-as.data.frame(list(fechas_pred,int_inf,val_,int_sup))
+names(val_pron)<-c("date","int_inf","pronostico","int_sup")
+val_pron_vs_orig<-merge(val_pron, y = TC_df_serie_completa, by = "date", all.x = TRUE)
+val_pron_vs_orig
+
+#guardar valores
+write.csv(val_pron_vs_orig, "csv_files/TC_valores_pronosticados.csv")
+```
+
+**Gráfica con límites**
+```{r}
+ggplot(val_pron_vs_orig, aes(date)) +  
+    geom_line(aes(y = pronostico), color = "black") +
+     geom_line(aes(y = int_inf), color = "red") +
+    geom_line(aes(y = int_sup), color = "green") +
+    geom_line(aes(y = value), color = "blue") +
+  ylim(10, 30)
+
+```
+Nuestro límite inferior parece ajustarse mejor a los valores reales que hemos tenido de Tasa de cambio, sin duda aun hay cambios que se podrían intertar el modelo, por ejemplo, intentar modelar con otro tipo de perioricidad y obtener los valores de predicción diarios usando interpolación.
