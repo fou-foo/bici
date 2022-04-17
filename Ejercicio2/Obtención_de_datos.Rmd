@@ -91,7 +91,7 @@ library(dplyr)
 
 
 ## Funciones
-```{r}
+```{r funciones}
 #------------------------------------------------Banxico functions---------------------------
 #Obtiene json con datos provenientes de Banxico
 
@@ -189,7 +189,7 @@ conv_q_date<-function(date_q){
 
 ### tokens
 
-```{r}
+```{r tokens}
 #Token Ban
 #token_ban<-"token"
 

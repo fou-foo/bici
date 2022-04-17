@@ -1,0 +1,5 @@
+install.packages('siebanxicor')
+install.packages('rjson')
+install.packages('bea.R')
+install.packages('devtools')
+install.packages('Quandl')

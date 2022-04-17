@@ -1,8 +1,15 @@
 ---
 title: "Ejercicios de Ecobici"
-output: html_notebook
+output:
+#  github_document
+  pdf_document: default
+  html_notebook: default
 ---
 En esta notebook se llevan acabo los 3 incisos del primer ejercicio
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
 
 ```{r message=FALSE, warning=FALSE}
 library(readr)
@@ -26,7 +33,7 @@ library(funtimes)
 
 **Funciones**
 
-```{r}
+```{r funciones}
 #Prueba para tendencia en series de tiempo.
 
 test_tend_lin<-function(dataset){
@@ -51,7 +58,7 @@ test_tend_lin<-function(dataset){
 
 ### Obtener datos
 
-```{r message=FALSE, warning=FALSE}
+```{r getdata, message=FALSE, warning=FALSE}
 dataset <- read_csv("csv_files/dataset.csv")
 
 #cambiar nome de columna, fecha Arribo por facilidad de manejo
@@ -61,24 +68,24 @@ names(dataset)[names(dataset) == 'Fecha Arribo'] <-'Fecha_Arribo'
 # 1.1  ¿En qué horarios hay mayor afluencia y en qué estaciones?
 
 ### Afluencia en retiros(horarios).
-```{r}
+```{r afluencia }
 #Crear variable de hora de retiro como factor y variable de dia de la semana
 dataset$Hora_Retiro_fac <- as.factor(hour(dataset$Hora_Retiro))
 dataset$Dia_Retiro <- as.factor(wday(dataset$Fecha_Retiro, label = TRUE)) 
 
 #Conteo de retiros por día, hora
-e1<-dataset %>% count(Hora_Retiro_fac,Dia_Retiro)
+e1<-dataset %>% dplyr::count(Hora_Retiro_fac,Dia_Retiro)
 head(e1 %>% arrange(desc(n)),5)
 
 #Conteo de retiros por horas 
-e2<- dataset %>% count(Hora=Hora_Retiro_fac, sort = TRUE)
+e2<- dataset %>% dplyr::count(Hora=Hora_Retiro_fac, sort = TRUE)
 head(e2,5)
 e2$variable<-"retiros"
 ```
 
 ### Afluencia en arribos(horarios).
 
-```{r}
+```{r afluencia2}
 #Crear variable de hora de arribo como factor y variable de dia de la semana
 
 dataset$HoraArribo_fac <- as.factor(hour(dataset$Hora_Arribo))
@@ -96,7 +103,7 @@ d2$variable<-"arribo"
 
 ## Gráficas de afluencia por horarios
 
-```{r}
+```{r horarios}
 #Unir datos de afluencia
 horas<-rbind(d2,e2)
 
@@ -127,7 +134,7 @@ Los días de lunes a Viernes tienen un comportamiento similar, mientras que para
 ## ¿En qué estaciones hay mayor afluencia de Retiros? 
 
 ### Afluencia en estaciones para retiros
-```{r}
+```{r retiros}
 #Contar usuarios en estación retiro
 Retiro_count<-dplyr::count(dataset, Ciclo_Estacion_Retiro, sort = TRUE)
 
@@ -156,7 +163,7 @@ f3<-ggplot(Retiro_popular, aes( as.factor(Ciclo_Estacion_Retiro),Hora_Retiro_fac
 
 ### Afluencia en estaciones para arribos
 
-```{r}
+```{r retiros2}
 #Contar usuarios en estación arribo
 Arribo_count<-dplyr::count(dataset, Ciclo_EstacionArribo, sort = TRUE)
 
@@ -208,8 +215,8 @@ dataset%>%
     distinct(Ciclo_EstacionArribo) %>% 
     count()
 ```
-```{r}
-#De dondé retiran las bicis y a dondé llegan
+```{r eda2}
+# De dondé retiran las bicis y a dondé llegan
 bike_use_path <- dataset%>% 
     group_by(Ciclo_Estacion_Retiro, Ciclo_EstacionArribo) %>% 
     count() %>% 
@@ -298,7 +305,7 @@ cu1<-bike_use_arribo %>%
 grid.arrange(bu1, cu1, ncol = 2)
 ```
 
-```{r}
+```{r c18}
 #agregar variables de hora decimal
 bike_tfm <-dataset %>% 
     mutate(hora_arribo_decimal = hms(Hora_Arribo) %>% as.numeric() %>% round(0) / 3600,
@@ -353,11 +360,12 @@ bike_tfm_arribo_porcentake_weekend %>%
                    alpha = 0.8)+ ggtitle("Distribución de porcentaje de arribos en fin de semana")+theme_bw()
 
 ```
-__ De la gráfica anterior resaltaría el hecho de que hay estaciones para las que el 50% de sus arribos son en fines de semana
+
+De la gráfica anterior resaltaría el hecho de que hay estaciones para las que el 50% de sus arribos son en fines de semana
 
 ### Preparar data para modelo
 
-```{r}
+```{r pre_model}
 
 library(plyr)
 gen<- dataset %>% select("Ciclo_Estacion_Retiro","Genero_Usuario")
@@ -432,7 +440,7 @@ Estos 3 perfiles ya cuenta con carateristicas diferentes de otro grupo pero simi
 **¿En qué estaciones puedes observar una tendencia de uso a la alta?**
 
 
-```{r}
+```{r r_1_3}
 #Vamos a considerar el uso total(arribos/retiros) de cada estación por día
 #contar arribos
 a1<- dataset %>% select("Ciclo_EstacionArribo","Fecha_Arribo")
@@ -460,12 +468,12 @@ uso_df<-uso_df %>% filter(t>=as_date("2021-08-01") & t<=as_date("2021-10-31"))
 ```
 
 Recordando que:
-El modelo de un proceso autorregresivo dice que en el momento t el valor Yt,consiste de una, δ (delta),más un coeficiente autorregresivo, φ (phi), por el valor del dato anterior (Yt - 1), más el ruido aleatorio, ɛt.
-La idea es tomar  φ, medida de cambio, para verificar que tanto aumenta o disminuye la tendencia.
+El modelo de un proceso autorregresivo dice que en el momento $t$ el valor $Y_t$,consiste de una, $\delta$ (delta),más un coeficiente autorregresivo, $\phi$ (phi), por el valor del dato anterior ($Y_t$ - 1), más el ruido aleatorio, ɛtc.
+La idea es tomar  $\phi$, medida de cambio, para verificar que tanto aumenta o disminuye la tendencia.
 
 Primero haremos pruebas de existencia de tendencia
 
-```{r message=TRUE, warning=TRUE}
+```{r c_28, message=TRUE, warning=TRUE}
 #Convertir cada estación en una columna
 uso_df_sp<-spread(uso_df,key = Estacion,value = n)
 uso_df_sp[is.na(uso_df_sp)]<-0
@@ -494,19 +502,25 @@ tend_alta<-uso_df_ten %>% arrange(desc(AR_coef)) %>% head(10)
 
 cat("Estaciones con tendencia a la alta:",tend_alta$Estacion)
 ```
+
+
 ```{r}
 #Obtenemos las 10 con menor proporción de cambio
 tend_baja<-uso_df_ten%>% arrange(AR_coef) %>% head(10)
 
 cat("Estaciones con tendencia a la baja:",tend_baja$Estacion)
 ```
+
 ### Gráficas variables finales
+
 ```{r}
 #Gráfica de estaciones con tendencia a la alta 
 uso_ten_alta<-uso_df %>% filter(Estacion %in% tend_alta$Estacion)
 ggplot(uso_ten_alta,aes(x=t,y=n,group=Estacion)) + geom_line()+ facet_wrap(~ Estacion)
 
 ```
+
+
 ```{r}
 #Gráfica de estaciones con tendencia a la baja
 uso_ten_baja<-uso_df %>% filter(Estacion %in% tend_baja$Estacion)
