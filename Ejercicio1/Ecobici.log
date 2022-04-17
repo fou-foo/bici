@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022) (preloaded format=pdflatex 2022.4.17)  17 APR 2022 05:40
+This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022) (preloaded format=pdflatex 2022.4.14)  17 APR 2022 07:01
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -299,7 +299,7 @@ Package graphics Info: Driver file: pdftex.def on input line 107.
 \Gin@req@height=\dimen164
 \Gin@req@width=\dimen165
 ) (c:/Users/joser/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def
-File: l3backend-pdftex.def 2022-04-14 L3 backend support: PDF output (pdfTeX)
+File: l3backend-pdftex.def 2022-04-10 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count287
 \l__pdf_internal_box=\box53
 )
@@ -715,10 +715,10 @@ Type  H <return>  for immediate help.
 l.1350 ...(Y_t\) - 1), más el ruido aleatorio, ɛ
                                                   tc. La idea es tomar 
 Here is how much of TeX's memory you used:
- 11238 strings out of 480198
- 184103 string characters out of 5891664
- 499117 words of memory out of 5000000
- 28950 multiletter control sequences out of 15000+600000
+ 11235 strings out of 480198
+ 184072 string characters out of 5891172
+ 499009 words of memory out of 5000000
+ 28945 multiletter control sequences out of 15000+600000
  516112 words of font info for 71 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
  60i,6n,63p,1447b,466s stack positions out of 10000i,1000n,20000p,200000b,200000s
