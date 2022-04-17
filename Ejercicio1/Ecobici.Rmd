@@ -1,9 +1,8 @@
 ---
 title: "Ejercicios de Ecobici"
-output:
-#  github_document
-  pdf_document: default
-  html_notebook: default
+output:  github_document
+  #pdf_document: default
+  #html_notebook: default
 ---
 En esta notebook se llevan acabo los 3 incisos del primer ejercicio
 
@@ -92,11 +91,11 @@ dataset$HoraArribo_fac <- as.factor(hour(dataset$Hora_Arribo))
 dataset$DiaArribo <- as.factor(wday(dataset$Fecha_Arribo, label = TRUE)) 
 
 #Conteo de arribos por d??a, hora
-d1<-dataset %>% count(HoraArribo_fac,DiaArribo)
+d1<-dataset %>% dplyr::count(HoraArribo_fac,DiaArribo)
 head(d1 %>% arrange(desc(n)),5)
 
 #Conteo de retiros por horas
-d2<- dataset %>% count(Hora=HoraArribo_fac, sort = TRUE)
+d2<- dataset %>% dplyr::count(Hora=HoraArribo_fac, sort = TRUE)
 head(d2,5)
 d2$variable<-"arribo"
 ```
