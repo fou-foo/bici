@@ -1,0 +1,11 @@
+readr
+dplyr
+lubridate
+tidyr
+ggplot2
+gridExtra
+tseries
+animation
+factoextra
+funtimes
+plyr

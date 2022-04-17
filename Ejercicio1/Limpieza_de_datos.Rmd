@@ -1,6 +1,8 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output: github_document
+#  pdf_document: default
+#  html_notebook: default
 ---
 
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
